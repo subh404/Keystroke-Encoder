@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Keystroke → Hex Encoder</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:    #080c12;
+  --s1:    #10161f;
+  --s2:    #18202c;
+  --s3:    #1f2a38;
+  --br:    #27364a;
+  --tx:    #c9d1d9;
+  --tm:    #5d6b7a;
+  --ac:    #4fa3f7;
+  --green: #58d68d;
+  --pur:   #c39af0;
+  --red:   #ff6b6b;
+  --kw:    44px;
+  --kg:    4px;
+  --ku:    48px;   /* kw + kg */
+  --kh:    42px;
+  --kr:    5px;
+}
+
+body {
+  background: var(--bg);
+  color: var(--tx);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  min-height: 100vh;
+  padding: 20px 12px 48px;
+}
+
+.page {
+  max-width: 940px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── HEADER ── */
+.hdr { text-align: center; padding: 6px 0 2px; }
+.hdr h1 {
+  font-size: 1.65rem;
+  font-weight: 800;
+  background: linear-gradient(110deg, #4fa3f7 0%, #c39af0 55%, #58d68d 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  letter-spacing: -0.02em;
+}
+.hdr p { color: var(--tm); font-size: 0.82rem; margin-top: 5px; line-height: 1.5; }
+.hdr code {
+  background: var(--s2);
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: var(--red);
+  font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+}
+
+/* ── CANVAS ── */
+#cap {
+  display: block;
+  width: 100%;
+  height: 130px;
+  border-radius: 10px;
+  border: 2px solid var(--br);
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+#cap.active {
+  border-color: var(--ac);
+  box-shadow: 0 0 0 3px rgba(79,163,247,.12), 0 0 28px rgba(79,163,247,.1);
+}
+
+/* ── PANELS ── */
+.panel {
+  background: var(--s1);
+  border: 1px solid var(--br);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.ph {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.pt {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--tm);
+}
+.btns { display: flex; gap: 6px; }
+
+.btn {
+  padding: 4px 12px;
+  border-radius: 5px;
+  border: 1px solid var(--br);
+  background: var(--s2);
+  color: var(--tx);
+  font-size: 0.73rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.1s;
+  white-space: nowrap;
+  line-height: 1.7;
+}
+.btn:hover            { background: var(--s3); border-color: var(--ac); }
+.btn.danger:hover     { border-color: var(--red);   color: var(--red); }
+.btn.ok               { border-color: var(--green); color: var(--green); background: rgba(88,214,141,.08); }
+.btn.editing          { border-color: var(--ac);    color: var(--ac);   background: rgba(79,163,247,.08); }
+
+/* ── TOKENS AREA ── */
+.tok-area {
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 5px;
+  min-height: 46px;
+  padding: 8px;
+  background: var(--bg);
+  border: 1px solid var(--br);
+  border-radius: 7px;
+  margin-bottom: 10px;
+  overflow-y: auto;
+  max-height: 160px;
+}
+
+.tok {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 4px;
+  font-size: 0.77rem;
+  font-weight: 700;
+  font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  transition: opacity 0.1s, transform 0.08s;
+  border: 1px solid transparent;
+}
+.tok:hover       { opacity: 0.65; transform: scale(0.95); }
+.tok.t-key       { background: rgba(79,163,247,.13);  border-color: rgba(79,163,247,.4);  color: #7bbffc; }
+.tok.t-mod       { background: rgba(195,154,240,.13); border-color: rgba(195,154,240,.4); color: #d4b3ff; }
+.tok.t-sep       { background: rgba(255,107,107,.1);  border-color: rgba(255,107,107,.35);color: #ff8c8c; font-size: .7rem; }
+
+.tok-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--s3);
+  border: 1px solid var(--br);
+  border-radius: 4px;
+  padding: 3px 8px;
+  font-size: 0.67rem;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.1s;
+  z-index: 50;
+  font-family: system-ui, sans-serif;
+  font-weight: 400;
+  color: var(--tx);
+  box-shadow: 0 4px 12px rgba(0,0,0,.4);
+}
+.tok:hover .tok-tip { opacity: 1; }
+
+.grp-sep {
+  width: 1px;
+  height: 24px;
+  align-self: center;
+  background: var(--br);
+  margin: 0 2px;
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.empty-hint {
+  color: var(--tm);
+  font-size: 0.78rem;
+  padding: 6px 4px;
+  line-height: 1.5;
+}
+
+/* ── HEX STRING ROW ── */
+.hex-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+.hex-row label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--tm);
+  white-space: nowrap;
+}
+select.fmt {
+  padding: 4px 8px;
+  background: var(--s2);
+  border: 1px solid var(--br);
+  border-radius: 5px;
+  color: var(--tx);
+  font-size: 0.72rem;
+  cursor: pointer;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+#hexout {
+  flex: 1;
+  min-height: 34px;
+  padding: 5px 10px;
+  background: var(--bg);
+  border: 1px solid var(--br);
+  border-radius: 6px;
+  color: var(--green);
+  font-size: 0.78rem;
+  font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  word-break: break-all;
+  line-height: 1.6;
+  outline: none;
+  transition: border-color 0.1s, color 0.1s;
+  cursor: default;
+  white-space: pre-wrap;
+}
+#hexout[contenteditable="true"] {
+  border-color: var(--ac);
+  color: var(--tx);
+  cursor: text;
+}
+
+/* ── META ROW ── */
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 2px;
+}
+.stats { display: flex; gap: 16px; font-size: 0.71rem; color: var(--tm); }
+.stats b { color: var(--tx); font-weight: 700; }
+.legend { display: flex; gap: 12px; font-size: 0.69rem; color: var(--tm); }
+.li { display: flex; align-items: center; gap: 5px; }
+.li-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+
+/* ── KEYBOARD ── */
+.kb-wrap {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  width: max-content;
+  max-width: 100%;
+  padding-bottom: 2px;
+}
+
+.kb-main { display: flex; flex-direction: column; gap: var(--kg); }
+
+.kb-fn-row {
+  display: flex;
+  gap: 0;
+  width: calc(15 * var(--ku) - var(--kg)); /* match main rows */
+}
+.kb-fn-grp {
+  display: flex;
+  gap: var(--kg);
+  flex: 1;
+}
+.kb-fn-grp:not(:first-child) { margin-left: 14px; }
+
+.kb-row { display: flex; gap: var(--kg); }
+
+/* Key element */
+.kk {
+  height: var(--kh);
+  background: var(--s2);
+  border: 1px solid var(--br);
+  border-bottom: 3px solid #060a0f;
+  border-radius: var(--kr);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  padding: 2px 4px;
+  user-select: none;
+  transition: background 0.07s, border-color 0.07s, transform 0.07s;
+  overflow: hidden;
+}
+.kk .ktop  { font-size: 0.5rem;  color: var(--tm); line-height: 1; align-self: flex-start; padding-left: 2px; }
+.kk .kmain { font-size: 0.72rem; color: var(--tx); line-height: 1; }
+.kk.wide  .kmain { font-size: 0.62rem; }
+.kk.mod   .kmain { color: var(--pur); }
+.kk.fnkey { flex: 1; }
+
+/* Pressed states */
+.kk.pressed {
+  border-bottom-width: 1px;
+  transform: translateY(1px);
+}
+.kk.mod.pressed  { background: rgba(195,154,240,.22); border-color: var(--pur); }
+.kk.mod.pressed .kmain { color: var(--pur); }
+.kk.reg.pressed  { background: rgba(79,163,247,.22);  border-color: var(--ac);  }
+.kk.reg.pressed .kmain { color: var(--ac); }
+
+/* Nav cluster grid */
+.kb-nav {
+  display: grid;
+  grid-template-columns: repeat(3, calc(var(--ku) - var(--kg)));
+  grid-template-rows: repeat(5, var(--kh));
+  gap: var(--kg);
+  flex-shrink: 0;
+  align-content: start;
+}
+
+/* Keyboard section overflow */
+.kb-section { overflow-x: auto; padding-bottom: 4px; }
+.kb-section .ph { margin-bottom: 10px; }
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--br); border-radius: 3px; }
+
+/* ── OS NOTE ── */
+.os-note {
+  font-size: 0.72rem;
+  color: var(--tm);
+  background: rgba(255,200,0,.05);
+  border: 1px solid rgba(255,200,0,.15);
+  border-radius: 7px;
+  padding: 7px 13px;
+  line-height: 1.55;
+}
+.os-note strong { color: rgba(255,220,60,.85); font-weight: 600; }
+
+/* ── MANUAL ENTRY MODE ── */
+.kb-wrap.manual-mode .kk {
+  cursor: pointer;
+}
+.kb-wrap.manual-mode .kk:hover:not(.pressed) {
+  border-color: rgba(79,163,247,.5);
+  background: var(--s3);
+}
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- HEADER -->
+  <div class="hdr">
+    <h1>⌨ Keystroke → Hex Encoder</h1>
+    <p>Click the canvas, then type. Key combinations use <code>0xFF</code> as separator.<br>
+       Click any captured token to delete it · Use <em>Edit</em> to modify the hex string directly.</p>
+  </div>
+
+  <!-- CAPTURE CANVAS -->
+  <canvas id="cap" tabindex="0"></canvas>
+  <div class="os-note">
+    ⚠ <strong>OS shortcuts</strong> (Ctrl+Alt+T, Win key, Ctrl+Alt+Del, etc.) are intercepted by
+    the system before the browser sees them — they <em>cannot</em> be recorded by typing.
+    Use <strong>Manual Entry</strong> on the keyboard below to build any combination by clicking.
+  </div>
+
+  <!-- OUTPUT PANEL -->
+  <div class="panel" id="out-panel">
+    <div class="ph">
+      <span class="pt">Captured Tokens</span>
+      <div class="btns">
+        <button class="btn" id="btn-undo" title="Undo last keystroke">↩ Undo</button>
+        <button class="btn danger" id="btn-clear">✕ Clear</button>
+        <button class="btn" id="btn-copy">⎘ Copy</button>
+      </div>
+    </div>
+
+    <div class="tok-area" id="tok-area">
+      <span class="empty-hint">No keystrokes yet — click the canvas above and start typing</span>
+    </div>
+
+    <div class="hex-row">
+      <label>Output</label>
+      <select class="fmt" id="fmt">
+        <option value="space">Spaced  &nbsp;61 FF 63</option>
+        <option value="0x"   >0x      &nbsp;0x61 0xFF</option>
+        <option value="xesc" >\x      &nbsp;\x61\xFF</option>
+        <option value="raw"  >Plain   &nbsp;2A34B4</option>
+        <option value="csv"  >CSV     &nbsp;0x61,0xFF</option>
+        <option value="carr" >C Array &nbsp;{0x61,0xFF}</option>
+      </select>
+      <div id="hexout" contenteditable="false" spellcheck="false"></div>
+      <button class="btn" id="btn-edit">✎ Edit</button>
+    </div>
+
+    <div class="meta-row">
+      <div class="stats">
+        Keys: <b id="s-keys">0</b>&nbsp;
+        Tokens: <b id="s-tok">0</b>&nbsp;
+        Bytes: <b id="s-bytes">0</b>&nbsp;
+        Combos: <b id="s-combos">0</b>
+      </div>
+      <div class="legend">
+        <div class="li">
+          <div class="li-dot" style="background:rgba(79,163,247,.4);border:1px solid #4fa3f7;"></div>Key
+        </div>
+        <div class="li">
+          <div class="li-dot" style="background:rgba(195,154,240,.4);border:1px solid #c39af0;"></div>Modifier
+        </div>
+        <div class="li">
+          <div class="li-dot" style="background:rgba(255,107,107,.35);border:1px solid #ff6b6b;"></div>0xFF Sep
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KEYBOARD PANEL -->
+  <div class="panel kb-section">
+    <div class="ph">
+      <span class="pt">Virtual Keyboard</span>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="font-size:.68rem;color:var(--tm)" id="kb-hint">Highlights active keys in real-time</span>
+        <button class="btn" id="btn-manual" title="Click keys on the keyboard to build combos manually">☞ Manual Entry</button>
+      </div>
+    </div>
+    <div class="kb-wrap">
+      <div class="kb-main" id="kb-main"></div>
+      <div class="kb-nav"  id="kb-nav"></div>
+    </div>
+  </div>
+
+</div><!-- .page -->
+<script>
+'use strict';
+
+/* ═══════════════════════════════════════════════════════════
+   HID KEYCODES  (USB HID Usage Tables — Keyboard/Keypad Page)
+   Keyed by e.code (physical position), not e.key (character).
+═══════════════════════════════════════════════════════════ */
+const CODE_TO_HID = {
+  // Letters A–Z  (0x04–0x1D)
+  'KeyA':'04','KeyB':'05','KeyC':'06','KeyD':'07','KeyE':'08','KeyF':'09',
+  'KeyG':'0A','KeyH':'0B','KeyI':'0C','KeyJ':'0D','KeyK':'0E','KeyL':'0F',
+  'KeyM':'10','KeyN':'11','KeyO':'12','KeyP':'13','KeyQ':'14','KeyR':'15',
+  'KeyS':'16','KeyT':'17','KeyU':'18','KeyV':'19','KeyW':'1A','KeyX':'1B',
+  'KeyY':'1C','KeyZ':'1D',
+  // Digits 1–0  (0x1E–0x27)
+  'Digit1':'1E','Digit2':'1F','Digit3':'20','Digit4':'21','Digit5':'22',
+  'Digit6':'23','Digit7':'24','Digit8':'25','Digit9':'26','Digit0':'27',
+  // Core editing  (0x28–0x38)
+  'Enter':'28','Escape':'29','Backspace':'2A','Tab':'2B','Space':'2C',
+  'Minus':'2D','Equal':'2E','BracketLeft':'2F','BracketRight':'30',
+  'Backslash':'31','Semicolon':'33','Quote':'34','Backquote':'35',
+  'Comma':'36','Period':'37','Slash':'38','CapsLock':'39',
+  // F1–F12  (0x3A–0x45)
+  'F1':'3A','F2':'3B','F3':'3C','F4':'3D','F5':'3E','F6':'3F',
+  'F7':'40','F8':'41','F9':'42','F10':'43','F11':'44','F12':'45',
+  // System / navigation  (0x46–0x53)
+  'PrintScreen':'46','ScrollLock':'47','Pause':'48',
+  'Insert':'49','Home':'4A','PageUp':'4B',
+  'Delete':'4C','End':'4D','PageDown':'4E',
+  'ArrowRight':'4F','ArrowLeft':'50','ArrowDown':'51','ArrowUp':'52',
+  'NumLock':'53',
+  'ContextMenu':'65',   // HID APPLICATION (0x65)
+  // Modifiers — Left (0xE0–0xE3) and Right (0xE4–0xE7)
+  'ControlLeft':'E0','ShiftLeft':'E1','AltLeft':'E2','MetaLeft':'E3',
+  'ControlRight':'E4','ShiftRight':'E5','AltRight':'E6','MetaRight':'E7',
+};
+
+const MOD_CODES = new Set([
+  'ControlLeft','ShiftLeft','AltLeft','MetaLeft',
+  'ControlRight','ShiftRight','AltRight','MetaRight',
+]);
+
+const HEX_LABEL = {
+  '04':'A','05':'B','06':'C','07':'D','08':'E','09':'F',
+  '0A':'G','0B':'H','0C':'I','0D':'J','0E':'K','0F':'L',
+  '10':'M','11':'N','12':'O','13':'P','14':'Q','15':'R',
+  '16':'S','17':'T','18':'U','19':'V','1A':'W','1B':'X','1C':'Y','1D':'Z',
+  '1E':'1','1F':'2','20':'3','21':'4','22':'5',
+  '23':'6','24':'7','25':'8','26':'9','27':'0',
+  '28':'Enter','29':'Escape','2A':'Backspace','2B':'Tab','2C':'Space',
+  '2D':'Minus (-)','2E':'Equal (=)','2F':'[ Bracket Left','30':'] Bracket Right',
+  '31':'\\ Backslash','33':'; Semicolon',"34":"' Apostrophe",'35':'` Grave',
+  '36':', Comma','37':'. Period','38':'/ Slash','39':'Caps Lock',
+  '3A':'F1','3B':'F2','3C':'F3','3D':'F4','3E':'F5','3F':'F6',
+  '40':'F7','41':'F8','42':'F9','43':'F10','44':'F11','45':'F12',
+  '46':'Print Screen','47':'Scroll Lock','48':'Pause',
+  '49':'Insert','4A':'Home','4B':'Page Up',
+  '4C':'Delete','4D':'End','4E':'Page Down',
+  '4F':'Arrow Right','50':'Arrow Left','51':'Arrow Down','52':'Arrow Up',
+  '53':'Num Lock','65':'Application (Menu)',
+  'E0':'Ctrl Left','E1':'Shift Left','E2':'Alt Left','E3':'Win/GUI Left',
+  'E4':'Ctrl Right','E5':'Shift Right','E6':'Alt Right','E7':'Win/GUI Right',
+  'FF':'0xFF  (separator)',
+};
+
+function codeToHex(code) {
+  return CODE_TO_HID[code] || null;
+}
+
+function hexLabel(h) {
+  const u = h.toUpperCase();
+  return HEX_LABEL[u] || `0x${u}`;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════ */
+let tokens      = [];    // {hex, type:'key'|'mod'|'sep', keyName, group}
+let activeMods  = new Set();
+let pendingMods = new Set(); // mods pressed but not yet used in a combo (for solo capture)
+let undoStack   = [];
+let group       = 0;    // increments each keystroke for visual grouping
+let keyCount    = 0;
+let comboCount  = 0;
+let manualMode  = false;
+let manualMods  = new Set(); // modifiers held in manual-entry mode
+
+/* ═══════════════════════════════════════════════════════════
+   CANVAS
+═══════════════════════════════════════════════════════════ */
+const CAP = document.getElementById('cap');
+const cx  = CAP.getContext('2d');
+let focused = false;
+let rafId   = null;
+let lastPress = null; // {display, hexStr, time}
+
+function initCanvas() {
+  function resize() {
+    const dpr  = window.devicePixelRatio || 1;
+    const rect = CAP.getBoundingClientRect();
+    CAP.width  = rect.width  * dpr;
+    CAP.height = rect.height * dpr;
+    cx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    if (!focused) drawCanvas();
+  }
+  new ResizeObserver(resize).observe(CAP);
+  resize();
+}
+
+function drawCanvas() {
+  const W = CAP.offsetWidth, H = CAP.offsetHeight;
+  cx.clearRect(0, 0, W, H);
+
+  // Background
+  const bg = cx.createLinearGradient(0, 0, W, H);
+  bg.addColorStop(0, '#060a10');
+  bg.addColorStop(1, '#0b1420');
+  cx.fillStyle = bg;
+  cx.fillRect(0, 0, W, H);
+
+  // Dot grid
+  cx.fillStyle = 'rgba(255,255,255,0.022)';
+  for (let x = 24; x < W; x += 32)
+    for (let y = 18; y < H; y += 32)
+      cx.fillRect(x, y, 1.5, 1.5);
+
+  if (!focused) {
+    cx.fillStyle = 'rgba(0,0,0,.35)';
+    cx.fillRect(0, 0, W, H);
+    cx.font = '14px system-ui, sans-serif';
+    cx.fillStyle = 'rgba(93,107,122,.9)';
+    cx.textAlign = 'center';
+    cx.textBaseline = 'middle';
+    cx.fillText('🖱  Click here to activate  ·  then start typing', W / 2, H / 2);
+    return;
+  }
+
+  const now = Date.now();
+
+  // Pulsing inset ring
+  const p = 0.42 + 0.35 * Math.sin(now * 0.0038);
+  cx.strokeStyle = `rgba(79,163,247,${p * 0.38})`;
+  cx.lineWidth = 1;
+  cx.strokeRect(6, 6, W - 12, H - 12);
+
+  // Status dot
+  cx.shadowColor = '#58d68d';
+  cx.shadowBlur  = 8;
+  cx.fillStyle   = '#58d68d';
+  cx.beginPath(); cx.arc(26, H / 2 - 8, 5, 0, Math.PI * 2); cx.fill();
+  cx.shadowBlur  = 0;
+
+  cx.font = '12px system-ui, sans-serif';
+  cx.fillStyle = 'rgba(88,214,141,.85)';
+  cx.textAlign = 'left'; cx.textBaseline = 'middle';
+  cx.fillText('● Capturing', 40, H / 2 - 8);
+
+  cx.font = '11px system-ui, sans-serif';
+  cx.fillStyle = 'rgba(93,107,122,.75)';
+  cx.fillText(`${tokens.length} token${tokens.length !== 1 ? 's' : ''}  ·  ${keyCount} keystroke${keyCount !== 1 ? 's' : ''}  ·  ${comboCount} combo${comboCount !== 1 ? 's' : ''}`, 40, H / 2 + 10);
+
+  // Active modifiers display
+  if (activeMods.size > 0) {
+    cx.font = '10px system-ui, sans-serif';
+    let bx = 40;
+    const by = H / 2 + 27;
+    for (const mod of activeMods) {
+      const lbl = `${HEX_LABEL[CODE_TO_HID[mod]] || mod}  [${CODE_TO_HID[mod]}]`;
+      const tw  = cx.measureText(lbl).width;
+      cx.fillStyle   = 'rgba(195,154,240,.16)';
+      cx.strokeStyle = 'rgba(195,154,240,.5)';
+      cx.lineWidth   = 1;
+      rrect(cx, bx, by - 9, tw + 14, 17, 4);
+      cx.fill(); cx.stroke();
+      cx.fillStyle   = '#d4b3ff';
+      cx.textAlign   = 'left';
+      cx.textBaseline = 'middle';
+      cx.fillText(lbl, bx + 7, by);
+      bx += tw + 22;
+    }
+  }
+
+  // Last key badge (fades out over 1.4 s)
+  if (lastPress) {
+    const age  = now - lastPress.time;
+    const fade = Math.max(0, 1 - age / 1400);
+    if (fade > 0) {
+      cx.globalAlpha = fade;
+      const bx = W - 140, by = H / 2;
+      const bw = 230, bh = 70;
+      cx.fillStyle   = 'rgba(79,163,247,.07)';
+      cx.strokeStyle = `rgba(79,163,247,${0.28 * fade})`;
+      cx.lineWidth   = 1;
+      rrect(cx, bx - bw / 2, by - bh / 2, bw, bh, 8);
+      cx.fill(); cx.stroke();
+
+      cx.font = `bold 18px 'Cascadia Code', Consolas, monospace`;
+      cx.fillStyle = '#7bbffc';
+      cx.textAlign = 'center'; cx.textBaseline = 'middle';
+      const disp = lastPress.display;
+      cx.fillText(disp.length > 22 ? disp.slice(0, 20) + '…' : disp, bx, by - 9);
+
+      cx.font = `11px 'Cascadia Code', Consolas, monospace`;
+      cx.fillStyle = 'rgba(123,191,252,.55)';
+      cx.fillText(lastPress.hexStr, bx, by + 13);
+      cx.globalAlpha = 1;
+    }
+  }
+
+  if (focused) rafId = requestAnimationFrame(drawCanvas);
+}
+
+function rrect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.lineTo(x + w - r, y);
+  c.quadraticCurveTo(x + w, y, x + w, y + r);
+  c.lineTo(x + w, y + h - r);
+  c.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  c.lineTo(x + r, y + h);
+  c.quadraticCurveTo(x, y + h, x, y + h - r);
+  c.lineTo(x, y + r);
+  c.quadraticCurveTo(x, y, x + r, y);
+  c.closePath();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CANVAS EVENTS
+═══════════════════════════════════════════════════════════ */
+CAP.addEventListener('focus', () => {
+  focused = true;
+  CAP.classList.add('active');
+  if (rafId) cancelAnimationFrame(rafId);
+  rafId = requestAnimationFrame(drawCanvas);
+});
+
+CAP.addEventListener('blur', () => {
+  focused = false;
+  CAP.classList.remove('active');
+  if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+  activeMods.clear();
+  pendingMods.clear();
+  drawCanvas();
+});
+
+CAP.addEventListener('click', () => CAP.focus());
+
+CAP.addEventListener('keydown', e => {
+  e.preventDefault();
+  keyHighlight(e.code, true);
+
+  if (MOD_CODES.has(e.code)) {
+    activeMods.add(e.code);
+    pendingMods.add(e.code); // will be consumed if another key follows
+    return;
+  }
+
+  // A regular key press consumes any pending modifiers (they are part of this combo)
+  pendingMods.clear();
+
+  const hex = codeToHex(e.code);
+  if (!hex) return;
+
+  // Save undo snapshot
+  saveUndo();
+
+  group++;
+  const mods = Array.from(activeMods);
+  const newToks = [];
+
+  mods.forEach(code => {
+    newToks.push({ hex: CODE_TO_HID[code], type: 'mod', keyName: code,        group });
+    newToks.push({ hex: 'FF',              type: 'sep', keyName: 'separator', group });
+  });
+  newToks.push({ hex, type: 'key', keyName: e.code, group });
+  tokens.push(...newToks);
+
+  keyCount++;
+  if (mods.length > 0) comboCount++;
+
+  // Info for canvas
+  const keyName  = HEX_LABEL[hex] || e.code;
+  const modNames = mods.map(c => HEX_LABEL[CODE_TO_HID[c]] || c);
+  const combStr  = mods.length > 0 ? [...modNames, keyName].join('+') : keyName;
+  const hexStr   = newToks.map(t => '0x' + t.hex).join(' ');
+  lastPress = { display: combStr, hexStr, time: Date.now() };
+
+  updateUI();
+});
+
+CAP.addEventListener('keyup', e => {
+  keyHighlight(e.code, false);
+
+  // Solo modifier: pressed and released without any other key → record it alone
+  if (MOD_CODES.has(e.code) && pendingMods.has(e.code)) {
+    const hex = CODE_TO_HID[e.code];
+    if (hex) {
+      saveUndo();
+      group++;
+      tokens.push({ hex, type: 'mod', keyName: e.code, group });
+      keyCount++;
+      const keyName = HEX_LABEL[hex] || e.code;
+      lastPress = { display: keyName, hexStr: '0x' + hex, time: Date.now() };
+      updateUI();
+    }
+  }
+  pendingMods.delete(e.code);
+  activeMods.delete(e.code);
+});
+
+/* ═══════════════════════════════════════════════════════════
+   TOKEN RENDERING
+═══════════════════════════════════════════════════════════ */
+function renderTokens() {
+  const area = document.getElementById('tok-area');
+
+  if (tokens.length === 0) {
+    area.innerHTML = '<span class="empty-hint">No keystrokes yet — click the canvas above and start typing</span>';
+    return;
+  }
+
+  area.innerHTML = '';
+  let prevGroup = -1;
+
+  tokens.forEach((tok, i) => {
+    if (prevGroup !== -1 && tok.group !== prevGroup) {
+      const s = document.createElement('div');
+      s.className = 'grp-sep';
+      area.appendChild(s);
+    }
+    prevGroup = tok.group;
+
+    const el = document.createElement('span');
+    el.className = `tok t-${tok.type}`;
+    el.textContent = tok.hex;
+
+    const tip = document.createElement('span');
+    tip.className = 'tok-tip';
+    tip.textContent = hexLabel(tok.hex) + '  ·  click to delete';
+    el.appendChild(tip);
+
+    el.addEventListener('click', () => deleteTok(i));
+    area.appendChild(el);
+  });
+
+  // Scroll to newest
+  area.scrollTop = area.scrollHeight;
+}
+
+function deleteTok(idx) {
+  saveUndo();
+  tokens.splice(idx, 1);
+  recalcStats();
+  updateUI();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   HEX OUTPUT
+═══════════════════════════════════════════════════════════ */
+function formatOut(fmt) {
+  if (!tokens.length) return '';
+  const hh = tokens.map(t => t.hex.toUpperCase());
+  switch (fmt) {
+    case '0x':   return hh.map(h => '0x' + h).join(' ');
+    case 'xesc': return hh.map(h => '\\x' + h).join('');
+    case 'raw':  return hh.join('');
+    case 'csv':  return hh.map(h => '0x' + h).join(',');
+    case 'carr': return '{' + hh.map(h => '0x' + h).join(', ') + '}';
+    default:     return hh.join(' ');
+  }
+}
+
+function renderHexOut() {
+  const el = document.getElementById('hexout');
+  if (el.getAttribute('contenteditable') !== 'true') {
+    el.textContent = formatOut(document.getElementById('fmt').value);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STATS
+═══════════════════════════════════════════════════════════ */
+function recalcStats() {
+  keyCount   = tokens.filter(t => t.type === 'key').length;
+  comboCount = 0;
+  // A combo = any group containing a modifier token
+  const grpsWithMod = new Set(tokens.filter(t => t.type === 'mod').map(t => t.group));
+  comboCount = grpsWithMod.size;
+}
+
+function updateStats() {
+  document.getElementById('s-keys').textContent   = keyCount;
+  document.getElementById('s-tok').textContent    = tokens.length;
+  document.getElementById('s-bytes').textContent  = tokens.filter(t => t.type !== 'sep').length;
+  document.getElementById('s-combos').textContent = comboCount;
+}
+
+function updateUI() {
+  renderTokens();
+  renderHexOut();
+  updateStats();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UNDO
+═══════════════════════════════════════════════════════════ */
+function saveUndo() {
+  undoStack.push({
+    tokens:     tokens.map(t => ({ ...t })),
+    keyCount,
+    comboCount,
+    group,
+  });
+  if (undoStack.length > 100) undoStack.shift();
+}
+
+function doUndo() {
+  if (!undoStack.length) return;
+  const snap = undoStack.pop();
+  tokens     = snap.tokens;
+  keyCount   = snap.keyCount;
+  comboCount = snap.comboCount;
+  group      = snap.group;
+  updateUI();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BUTTONS
+═══════════════════════════════════════════════════════════ */
+document.getElementById('btn-undo').addEventListener('click', doUndo);
+
+document.getElementById('btn-clear').addEventListener('click', () => {
+  if (!tokens.length) return;
+  saveUndo();
+  tokens = []; keyCount = 0; comboCount = 0; group = 0;
+  updateUI();
+});
+
+document.getElementById('btn-copy').addEventListener('click', async () => {
+  const str = formatOut(document.getElementById('fmt').value);
+  if (!str) return;
+  try {
+    await navigator.clipboard.writeText(str);
+    const b = document.getElementById('btn-copy');
+    b.textContent = '✓ Copied!';
+    b.classList.add('ok');
+    setTimeout(() => { b.textContent = '⎘ Copy'; b.classList.remove('ok'); }, 1600);
+  } catch { /* clipboard denied */ }
+});
+
+document.getElementById('fmt').addEventListener('change', renderHexOut);
+
+/* ── EDIT MODE ── */
+const hexout  = document.getElementById('hexout');
+const btnEdit = document.getElementById('btn-edit');
+let editMode  = false;
+
+btnEdit.addEventListener('click', () => {
+  editMode = !editMode;
+  hexout.setAttribute('contenteditable', editMode ? 'true' : 'false');
+  btnEdit.textContent = editMode ? '✓ Save' : '✎ Edit';
+  btnEdit.classList.toggle('editing', editMode);
+  if (editMode) {
+    hexout.focus();
+    // Select all text
+    const range = document.createRange();
+    range.selectNodeContents(hexout);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  } else {
+    parseEditedHex(hexout.textContent.trim());
+  }
+});
+
+hexout.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && editMode) { e.preventDefault(); btnEdit.click(); }
+  if (e.key === 'Escape' && editMode) {
+    editMode = false;
+    hexout.setAttribute('contenteditable', 'false');
+    btnEdit.textContent = '✎ Edit';
+    btnEdit.classList.remove('editing');
+    renderHexOut(); // restore clean display
+  }
+});
+
+function parseEditedHex(raw) {
+  if (!raw) {
+    saveUndo(); tokens = []; keyCount = 0; comboCount = 0; group = 0;
+    updateUI(); return;
+  }
+
+  let parts = [];
+  if (raw.startsWith('{'))      parts = raw.replace(/[{}]/g, '').split(',').map(s => s.replace(/0x/gi,'').trim());
+  else if (raw.includes('\\x')) parts = raw.split('\\x').filter(Boolean).map(s => s.trim().slice(0, 2));
+  else if (raw.includes(','))   parts = raw.split(',').map(s => s.replace(/0x/gi,'').trim());
+  else if (/\s/.test(raw))      parts = raw.split(/\s+/).map(s => s.replace(/0x/gi,'').trim());
+  else                          parts = (raw.match(/.{1,2}/g) || []).map(s => s.trim());
+
+  const valid = parts.map(h => h.toUpperCase()).filter(h => /^[0-9A-F]{2}$/.test(h));
+  if (!valid.length) { renderHexOut(); return; }
+
+  saveUndo();
+  group = 0;
+  let g = 0;
+  const newToks = [];
+
+  // Reconstruct groups: mod(s) + FF + key sequences
+  let i = 0;
+  while (i < valid.length) {
+    const h = valid[i];
+    const MOD_HEX_SET = new Set(['E0','E1','E2','E3','E4','E5','E6','E7']);
+    const isModHex = MOD_HEX_SET.has(h);
+    const isSep    = h === 'FF';
+
+    if (isSep) { i++; continue; } // skip stray separators, handled below
+
+    if (isModHex) {
+      // Collect this combo group
+      g++;
+      newToks.push({ hex: h, type: 'mod', keyName: HEX_LABEL[h] || h, group: g });
+      i++;
+      // Check for FF + more stuff
+      while (i < valid.length && valid[i] === 'FF') {
+        newToks.push({ hex: 'FF', type: 'sep', keyName: 'separator', group: g });
+        i++;
+        if (i < valid.length && valid[i] !== 'FF') {
+          const nh = valid[i];
+          const nmod = MOD_HEX_SET.has(nh);
+          const type = nmod ? 'mod' : 'key';
+          newToks.push({ hex: nh, type, keyName: HEX_LABEL[nh] || nh, group: g });
+          i++;
+        }
+      }
+    } else {
+      g++;
+      newToks.push({ hex: h, type: 'key', keyName: HEX_LABEL[h] || h, group: g });
+      i++;
+    }
+  }
+
+  tokens     = newToks;
+  group      = g;
+  keyCount   = tokens.filter(t => t.type === 'key').length;
+  const grpsWithMod = new Set(tokens.filter(t => t.type === 'mod').map(t => t.group));
+  comboCount = grpsWithMod.size;
+  updateUI();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   KEYBOARD LAYOUT
+═══════════════════════════════════════════════════════════ */
+// Each key: { code, lb:label, tp?:top-char, w?:units(default 1), wide?:bool, mod?:bool }
+const KB_ROWS = [
+  // Number row
+  [
+    {code:'Backquote',    lb:'`',  tp:'~', w:1},
+    {code:'Digit1',       lb:'1',  tp:'!', w:1}, {code:'Digit2',  lb:'2',  tp:'@', w:1},
+    {code:'Digit3',       lb:'3',  tp:'#', w:1}, {code:'Digit4',  lb:'4',  tp:'$', w:1},
+    {code:'Digit5',       lb:'5',  tp:'%', w:1}, {code:'Digit6',  lb:'6',  tp:'^', w:1},
+    {code:'Digit7',       lb:'7',  tp:'&', w:1}, {code:'Digit8',  lb:'8',  tp:'*', w:1},
+    {code:'Digit9',       lb:'9',  tp:'(', w:1}, {code:'Digit0',  lb:'0',  tp:')', w:1},
+    {code:'Minus',        lb:'-',  tp:'_', w:1}, {code:'Equal',   lb:'=',  tp:'+', w:1},
+    {code:'Backspace',    lb:'⌫ Backspace', w:2, wide:true},
+  ],
+  // QWERTY row
+  [
+    {code:'Tab',          lb:'Tab',         w:1.5, wide:true},
+    {code:'KeyQ',lb:'Q',w:1},{code:'KeyW',lb:'W',w:1},{code:'KeyE',lb:'E',w:1},{code:'KeyR',lb:'R',w:1},
+    {code:'KeyT',lb:'T',w:1},{code:'KeyY',lb:'Y',w:1},{code:'KeyU',lb:'U',w:1},{code:'KeyI',lb:'I',w:1},
+    {code:'KeyO',lb:'O',w:1},{code:'KeyP',lb:'P',w:1},
+    {code:'BracketLeft',  lb:'[',  tp:'{', w:1},
+    {code:'BracketRight', lb:']',  tp:'}', w:1},
+    {code:'Backslash',    lb:'\\', tp:'|', w:1.5, wide:true},
+  ],
+  // ASDF row
+  [
+    {code:'CapsLock',     lb:'Caps Lock',   w:1.75, wide:true, mod:true},
+    {code:'KeyA',lb:'A',w:1},{code:'KeyS',lb:'S',w:1},{code:'KeyD',lb:'D',w:1},{code:'KeyF',lb:'F',w:1},
+    {code:'KeyG',lb:'G',w:1},{code:'KeyH',lb:'H',w:1},{code:'KeyJ',lb:'J',w:1},{code:'KeyK',lb:'K',w:1},
+    {code:'KeyL',lb:'L',w:1},
+    {code:'Semicolon',    lb:';',  tp:':', w:1},
+    {code:'Quote',        lb:"'",  tp:'"', w:1},
+    {code:'Enter',        lb:'↵ Enter',     w:2.25, wide:true},
+  ],
+  // ZXCV row
+  [
+    {code:'ShiftLeft',    lb:'⇧ Shift',     w:2.25, wide:true, mod:true},
+    {code:'KeyZ',lb:'Z',w:1},{code:'KeyX',lb:'X',w:1},{code:'KeyC',lb:'C',w:1},{code:'KeyV',lb:'V',w:1},
+    {code:'KeyB',lb:'B',w:1},{code:'KeyN',lb:'N',w:1},{code:'KeyM',lb:'M',w:1},
+    {code:'Comma',        lb:',',  tp:'<', w:1},
+    {code:'Period',       lb:'.',  tp:'>', w:1},
+    {code:'Slash',        lb:'/',  tp:'?', w:1},
+    {code:'ShiftRight',   lb:'⇧ Shift',     w:2.75, wide:true, mod:true},
+  ],
+  // Bottom row
+  [
+    {code:'ControlLeft',  lb:'Ctrl',  w:1.25, wide:true, mod:true},
+    {code:'MetaLeft',     lb:'Win',   w:1.25, wide:true, mod:true},
+    {code:'AltLeft',      lb:'Alt',   w:1.25, wide:true, mod:true},
+    {code:'Space',        lb:'',      w:6.25, wide:true},
+    {code:'AltRight',     lb:'Alt',   w:1.25, wide:true, mod:true},
+    {code:'MetaRight',    lb:'Win',   w:1.25, wide:true, mod:true},
+    {code:'ContextMenu',  lb:'≡',     w:1.25, wide:true},
+    {code:'ControlRight', lb:'Ctrl',  w:1.25, wide:true, mod:true},
+  ],
+];
+
+// Function row as separate groups (stretched to match main row width)
+const KB_FN_GROUPS = [
+  [{code:'Escape', lb:'Esc'}],
+  [
+    {code:'F1',lb:'F1'},{code:'F2',lb:'F2'},{code:'F3',lb:'F3'},{code:'F4',lb:'F4'},
+  ],
+  [
+    {code:'F5',lb:'F5'},{code:'F6',lb:'F6'},{code:'F7',lb:'F7'},{code:'F8',lb:'F8'},
+  ],
+  [
+    {code:'F9',lb:'F9'},{code:'F10',lb:'F10'},{code:'F11',lb:'F11'},{code:'F12',lb:'F12'},
+  ],
+];
+
+// Nav cluster: {code, lb, col, row} (1-indexed CSS grid)
+const KB_NAV = [
+  {code:'Insert',    lb:'Ins',  col:1,row:1},
+  {code:'Home',      lb:'Home', col:2,row:1},
+  {code:'PageUp',    lb:'PgUp', col:3,row:1},
+  {code:'Delete',    lb:'Del',  col:1,row:2},
+  {code:'End',       lb:'End',  col:2,row:2},
+  {code:'PageDown',  lb:'PgDn', col:3,row:2},
+  {code:'ArrowUp',   lb:'↑',    col:2,row:4},
+  {code:'ArrowLeft', lb:'←',    col:1,row:5},
+  {code:'ArrowDown', lb:'↓',    col:2,row:5},
+  {code:'ArrowRight',lb:'→',    col:3,row:5},
+];
+
+/* ═══════════════════════════════════════════════════════════
+   KEYBOARD RENDER
+═══════════════════════════════════════════════════════════ */
+const keyEls = new Map(); // code → element
+
+function buildKeyboard() {
+  const main = document.getElementById('kb-main');
+  const nav  = document.getElementById('kb-nav');
+
+  // Function row (groups stretched to fill row)
+  const fnRow = document.createElement('div');
+  fnRow.className = 'kb-fn-row';
+  KB_FN_GROUPS.forEach(grp => {
+    const g = document.createElement('div');
+    g.className = 'kb-fn-grp';
+    grp.forEach(k => {
+      const el = makeKey(k, true); // fnkey=true
+      el.classList.add('fnkey', 'reg');
+      g.appendChild(el);
+    });
+    fnRow.appendChild(g);
+  });
+  main.appendChild(fnRow);
+
+  // Main rows
+  KB_ROWS.forEach(row => {
+    const rowEl = document.createElement('div');
+    rowEl.className = 'kb-row';
+    row.forEach(k => {
+      const el = makeKey(k, false);
+      rowEl.appendChild(el);
+    });
+    main.appendChild(rowEl);
+  });
+
+  // Nav cluster
+  KB_NAV.forEach(k => {
+    const el = document.createElement('div');
+    el.className = 'kk reg';
+    el.style.gridColumn = k.col;
+    el.style.gridRow    = k.row;
+    el.dataset.code     = k.code;
+    el.innerHTML = `<span class="kmain">${k.lb}</span>`;
+    el.addEventListener('click', () => handleManualClick(k.code));
+    nav.appendChild(el);
+    keyEls.set(k.code, el);
+  });
+}
+
+function makeKey(k, isFn) {
+  const el = document.createElement('div');
+  const cls = ['kk', k.mod ? 'mod' : 'reg'];
+  if (k.wide) cls.push('wide');
+  el.className = cls.join(' ');
+
+  if (!isFn) {
+    const w = k.w || 1;
+    el.style.width = `calc(${w} * var(--ku) - var(--kg))`;
+  }
+
+  el.dataset.code = k.code;
+  let html = '';
+  if (k.tp) html += `<span class="ktop">${k.tp}</span>`;
+  html += `<span class="kmain">${k.lb}</span>`;
+  el.innerHTML = html;
+
+  el.addEventListener('click', () => handleManualClick(k.code));
+  keyEls.set(k.code, el);
+  return el;
+}
+
+function keyHighlight(code, on) {
+  const el = keyEls.get(code);
+  if (el) el.classList.toggle('pressed', on);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MANUAL ENTRY MODE
+═══════════════════════════════════════════════════════════ */
+function handleManualClick(code) {
+  if (!manualMode) return;
+
+  if (MOD_CODES.has(code)) {
+    // Toggle modifier hold
+    if (manualMods.has(code)) {
+      manualMods.delete(code);
+      keyHighlight(code, false);
+    } else {
+      manualMods.add(code);
+      keyHighlight(code, true);
+    }
+    return;
+  }
+
+  const hex = codeToHex(code);
+  if (!hex) return;
+
+  saveUndo();
+  group++;
+  const mods = Array.from(manualMods);
+  const newToks = [];
+
+  mods.forEach(modCode => {
+    newToks.push({ hex: CODE_TO_HID[modCode], type: 'mod', keyName: modCode, group });
+    newToks.push({ hex: 'FF', type: 'sep', keyName: 'separator', group });
+  });
+  newToks.push({ hex, type: 'key', keyName: code, group });
+  tokens.push(...newToks);
+
+  keyCount++;
+  if (mods.length > 0) comboCount++;
+
+  // Release held manual modifiers after the key is recorded
+  manualMods.forEach(m => keyHighlight(m, false));
+  manualMods.clear();
+
+  const keyName  = HEX_LABEL[hex] || code;
+  const modNames = mods.map(c => HEX_LABEL[CODE_TO_HID[c]] || c);
+  const combStr  = mods.length > 0 ? [...modNames, keyName].join('+') : keyName;
+  const hexStr   = newToks.map(t => '0x' + t.hex).join(' ');
+  lastPress = { display: combStr, hexStr, time: Date.now() };
+  updateUI();
+}
+
+document.getElementById('btn-manual').addEventListener('click', () => {
+  manualMode = !manualMode;
+  const btn  = document.getElementById('btn-manual');
+  const hint = document.getElementById('kb-hint');
+  const wrap = document.querySelector('.kb-wrap');
+
+  // Release any held manual mods when toggling
+  manualMods.forEach(m => keyHighlight(m, false));
+  manualMods.clear();
+
+  if (manualMode) {
+    btn.textContent  = '✕ Exit Manual';
+    btn.classList.add('editing');
+    hint.textContent = 'Click modifiers to hold them, then click a key to record';
+    wrap.classList.add('manual-mode');
+  } else {
+    btn.textContent  = '☞ Manual Entry';
+    btn.classList.remove('editing');
+    hint.textContent = 'Highlights active keys in real-time';
+    wrap.classList.remove('manual-mode');
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════ */
+initCanvas();
+buildKeyboard();
+drawCanvas();
+updateUI();
+</script>
+</body>
+</html>
